@@ -1,26 +1,16 @@
 package main
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"net"
 	"os"
-	"server/config"
-	"strings"
+	"server/handlers"
+	"server/helpers/config"
+	"server/helpers/db"
 	"time"
 )
-
-type Message struct {
-	Name string
-	Group string
-	Data string
-}
-
-var db *sql.DB
 
 func init() {
     if err := godotenv.Load(); err != nil {
@@ -30,18 +20,8 @@ func init() {
 
 func main() {
 	conf := config.New()
-
-	var connectErr error
-	db, connectErr = sql.Open("mysql", conf.MysqlDsn)
-	if connectErr != nil {
-		panic(connectErr)
-	}
-	// See "Important settings" section.
-	db.SetConnMaxLifetime(time.Minute * 3)
-	db.SetMaxOpenConns(10)
-	db.SetMaxIdleConns(10)
-	defer db.Close()
-
+	dbConn := db.New(conf)
+	handler := handlers.New(dbConn)
 
 	messageChn := make(chan string)
 	go func() {
@@ -53,75 +33,48 @@ func main() {
 					if len(messages) >= 5 {
 						chunk := messages[0:5]
 						messages = []string{}
-						flush(chunk)
+						handler.Handle(chunk)
 					}
 				case <-time.After(10 * time.Second):
 					chunk := messages[:]
 					messages = []string{}
-					flush(chunk)
+					handler.Handle(chunk)
 			}
 
 		}
 	}()
 
-	serverAddr, err := net.ResolveUDPAddr("udp", conf.AppPort);
-	if err != nil {
-		fmt.Println(err);
-		os.Exit(0);
-	}
+	serverConn := runServer(conf)
 
-	serverConn, err := net.ListenUDP("udp", serverAddr);
-	if err != nil {
-		fmt.Println(err);
-		os.Exit(0);
-	}
+	defer dbConn.Close()
+	defer serverConn.Close()
 
-	defer serverConn.Close();
-
-	buf := make([]byte, 1024);
-
-	var message string;
+	buf := make([]byte, 1024)
+	var message string
 
 	for {
-		n, _, err := serverConn.ReadFromUDP(buf);
-		message = string(buf[0:n]);
-		messageChn <- message;
+		n, _, err := serverConn.ReadFromUDP(buf)
+		message = string(buf[0:n])
+		messageChn <- message
 		if err != nil {
-			fmt.Println(err);
+			fmt.Println(err)
 		}
 	}
 }
 
-func flush(messages []string) {
-	if len(messages) == 0 {
-		return
-	}
-
-	valueStrings := make([]string, 0, len(messages))
-	valueArgs := make([]interface{}, 0, len(messages) * 3)
-
-	var message Message
-	for _, value := range messages {
-		err := json.Unmarshal([]byte(value), &message)
-		if err != nil {
-			fmt.Println("Parsing error", err)
-			continue
-		}
-
-		valueStrings = append(valueStrings, "(?, ?, ?)")
-		valueArgs = append(valueArgs, message.Name)
-		valueArgs = append(valueArgs, message.Group)
-		valueArgs = append(valueArgs, message.Data)
-		fmt.Println(message)
-	}
-
-	ctx := context.Background()
-	SQL := fmt.Sprintf(
-		"INSERT INTO logs (record_name, group_name, data) VALUES %s",
-		strings.Join(valueStrings, ","),
-	)
-	_, err := db.ExecContext(ctx, SQL, valueArgs...)
+func runServer(config *config.Config) *net.UDPConn {
+	serverAddr, err := net.ResolveUDPAddr("udp", config.AppPort);
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(0)
 	}
+
+	serverConn, err := net.ListenUDP("udp", serverAddr);
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(0)
+	}
+
+	fmt.Println("Start listening " + config.AppPort)
+	return serverConn
 }
