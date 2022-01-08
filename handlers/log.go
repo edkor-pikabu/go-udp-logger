@@ -45,7 +45,6 @@ func (h *handler) Handle(messages []string) {
 		valueArgs = append(valueArgs, message.Name)
 		valueArgs = append(valueArgs, message.Group)
 		valueArgs = append(valueArgs, message.Data)
-		fmt.Println(message)
 	}
 
 	ctx := context.Background()
