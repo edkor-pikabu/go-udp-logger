@@ -1,6 +1,8 @@
 package config
 
 import (
+	"fmt"
+	"github.com/joho/godotenv"
 	"os"
 	"strconv"
 	"strings"
@@ -9,6 +11,12 @@ import (
 type Config struct {
     AppPort string
 	MysqlDsn string
+}
+
+func init() {
+	if err := godotenv.Load(); err != nil {
+		fmt.Println("No .env file found")
+	}
 }
 
 func New() *Config {

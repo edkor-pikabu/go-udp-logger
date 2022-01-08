@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/joho/godotenv"
 	"net"
 	"os"
 	"server/handlers"
@@ -11,12 +10,6 @@ import (
 	"server/helpers/db"
 	"time"
 )
-
-func init() {
-    if err := godotenv.Load(); err != nil {
-        fmt.Println("No .env file found")
-    }
-}
 
 func main() {
 	conf := config.New()
