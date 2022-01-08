@@ -48,6 +48,7 @@ func main() {
 	for {
 		n, _, err := serverConn.ReadFromUDP(buf)
 		message = string(buf[0:n])
+		fmt.Println(message)
 		messageChn <- message
 		if err != nil {
 			fmt.Println(err)
