@@ -20,6 +20,7 @@ func main() {
 	for i:=1; i<10; i++ {
 		go func(){
 			var messages []string
+			ticker := time.NewTicker(30 * time.Second)
 			for {
 				select {
 				case tmp := <- messageChn:
@@ -29,7 +30,7 @@ func main() {
 						messages = []string{}
 						handler.Handle(chunk)
 					}
-				case <-time.After(30 * time.Second):
+				case <-ticker.C:
 					chunk := messages[:]
 					messages = []string{}
 					handler.Handle(chunk)
