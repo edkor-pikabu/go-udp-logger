@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/enriquebris/goconcurrentqueue"
 	_ "github.com/go-sql-driver/mysql"
 	"net"
 	"os"
@@ -15,25 +16,28 @@ func main() {
 	conf := config.New()
 	dbConn := db.New(conf)
 	handler := handlers.New(dbConn)
+	queue := goconcurrentqueue.NewFIFO()
 
-	messageChn := make(chan string, 300)
 	for i:=1; i<10; i++ {
 		go func(){
 			var messages []string
 			ticker := time.NewTicker(30 * time.Second)
 			for {
 				select {
-				case tmp := <- messageChn:
-					messages = append(messages, tmp)
+				case <-ticker.C:
+					chunk := messages[:]
+					messages = []string{}
+					handler.Handle(chunk)
+				default:
+					tmp, err := queue.Dequeue()
+					if err == nil {
+						messages = append(messages, fmt.Sprintf("%v", tmp))
+					}
 					if len(messages) >= 100 {
 						chunk := messages[0:100]
 						messages = []string{}
 						handler.Handle(chunk)
 					}
-				case <-ticker.C:
-					chunk := messages[:]
-					messages = []string{}
-					handler.Handle(chunk)
 				}
 
 			}
@@ -56,18 +60,18 @@ func main() {
 		}
 		message = string(buf[0:n])
 		fmt.Println(message)
-		messageChn <- message
+		queue.Enqueue(message)
 	}
 }
 
 func runServer(config *config.Config) *net.UDPConn {
-	serverAddr, err := net.ResolveUDPAddr("udp", config.AppPort);
+	serverAddr, err := net.ResolveUDPAddr("udp", config.AppPort)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(0)
 	}
 
-	serverConn, err := net.ListenUDP("udp", serverAddr);
+	serverConn, err := net.ListenUDP("udp", serverAddr)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(0)
