@@ -16,26 +16,28 @@ func main() {
 	dbConn := db.New(conf)
 	handler := handlers.New(dbConn)
 
-	messageChn := make(chan string)
-	go func() {
-		var messages []string
-		for {
-			select {
+	messageChn := make(chan string, 300)
+	for i:=1; i<10; i++ {
+		go func(){
+			var messages []string
+			for {
+				select {
 				case tmp := <- messageChn:
 					messages = append(messages, tmp)
-					if len(messages) >= 5 {
-						chunk := messages[0:5]
+					if len(messages) >= 100 {
+						chunk := messages[0:100]
 						messages = []string{}
 						handler.Handle(chunk)
 					}
-				case <-time.After(10 * time.Second):
+				case <-time.After(30 * time.Second):
 					chunk := messages[:]
 					messages = []string{}
 					handler.Handle(chunk)
-			}
+				}
 
-		}
-	}()
+			}
+		}()
+	}
 
 	serverConn := runServer(conf)
 
@@ -47,12 +49,13 @@ func main() {
 
 	for {
 		n, _, err := serverConn.ReadFromUDP(buf)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
 		message = string(buf[0:n])
 		fmt.Println(message)
 		messageChn <- message
-		if err != nil {
-			fmt.Println(err)
-		}
 	}
 }
 
